@@ -2,6 +2,18 @@ from flask import Flask, redirect , render_template , request, flash
 from flask_sqlalchemy import SQLAlchemy
 from datetime import date, timedelta
 from sqlalchemy.orm import relationship
+from flask import render_template, redirect, url_for
+from flask import redirect, url_for, session
+from flask import render_template
+import matplotlib.pyplot as plt
+from io import BytesIO
+import base64
+from flask import request, jsonify
+from sqlalchemy import func
+from flask import session
+from sqlalchemy import not_
+from flask_login import login_user, current_user
+from flask_login import LoginManager
 
 app=Flask(__name__)
 # current_dir = os.path.abspath(os.path.dirname(__file__)) 
@@ -83,38 +95,45 @@ def home():
 #############################               USER SIDE              ############################################
 
 
-
-@app.route('/login',methods=['GET','POST'])
+@app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'GET':
-        return render_template("login.html",error="")
+        return render_template("login.html", error="")
 
     if request.method == 'POST':
-        error=None
-        check = request.form
-        breakpoint()      
-        search=User.query.filter_by(uname=check["uname"]).first()
-        if search == None:
-            error="Incorrect Username or password"
-
+        error = None
+        check = request.form      
+        search = User.query.filter_by(uname=check["uname"]).first()
+        if search is None:
+            error = "Incorrect Username or password"
         else:
             if search.password == check['password']:
-                user_books = user_book.query.filter_by(userID = search.ID).all()
+                user_books = user_book.query.filter_by(userID=search.ID).all()
                 issued_books = []
                 for i in user_books:
-                    issued_books.append(Book.query.filter_by(ID = i.bookID).first())
+                    issued_books.append(Book.query.filter_by(ID=i.bookID).first())
 
                 user_data = {
-                    'user' : search,
-                    'issued_books' : issued_books,
+                    'user': search,
+                    'issued_books': issued_books,
                     'msg': ""
                 }
 
-                return render_template('user_side/user_page.html',user_data=user_data)
+                return render_template('user_page.html', user=user_data['user'], issued_books=user_data['issued_books'], msg=user_data['msg'])
             else:
-                error="Incorrect Username or password"
+                error = "Incorrect Username or password"
 
-        return render_template("login.html",error=error)
+        return render_template("login.html", error=error)
+
+@app.route('/books')
+def books():
+    # Assuming you have a function to fetch the current user's ID
+    current_user_id = session.get('user_id')  # Assuming you store user ID in session
+
+    # Fetch books that do not have an entry in the Request table for the current user and book ID
+    books = Book.query.filter().all()
+
+    return render_template('books_list.html', books=books)
 
 @app.route("/<userID>/user_page")
 def user_page(userID):
@@ -427,8 +446,43 @@ def section_info(section_ID):
 
 
 
+# @app.route("/sections/<section_ID>/verify_book", methods=['GET', 'POST'])
+# def verify_book(section_ID):
+#     if request.method == 'POST':
+#         new_info = request.form
+#         print("Form Data:", new_info)  # Debugging: Print form data
+
+#         check = Book.query.filter_by(ID=new_info["ID"]).first()
+#         if check is None:
+#             new_book = Book(
+#                 ID=new_info["ID"],
+#                 Name=new_info["Name"],
+#                 Content=new_info["Content"],
+#                 Author=new_info["Author"],
+#                 Section_ID=section_ID
+#             )
+#             db.session.add(new_book)
+#             db.session.commit()
+#             print("New book added:", new_book)  # Debugging: Print newly added book
+
+#         else:
+#             return "Book with this ID already exists"
+
+#         books = Book.query.filter_by(Section_ID=section_ID).all()
+#         info = {
+#             'books': books,
+#             'section': Section.query.filter_by(ID=section_ID).first()
+#         }
+#         return render_template('add_book.html', info=info)
+
+#     # For GET requests, render the template for adding a new book
+#     return render_template('add_book.html')
+
+
 @app.route("/sections/<section_ID>/verify_book", methods=['GET', 'POST'])
 def verify_book(section_ID):
+    section = Section.query.get_or_404(section_ID)
+
     if request.method == 'POST':
         new_info = request.form
         print("Form Data:", new_info)  # Debugging: Print form data
@@ -445,19 +499,15 @@ def verify_book(section_ID):
             db.session.add(new_book)
             db.session.commit()
             print("New book added:", new_book)  # Debugging: Print newly added book
+            # Redirect to a new page to show success message or relevant information
+            return render_template('book_added_success.html', section=section)
 
         else:
             return "Book with this ID already exists"
 
-        books = Book.query.filter_by(Section_ID=section_ID).all()
-        info = {
-            'books': books,
-            'section': Section.query.filter_by(ID=section_ID).first()
-        }
-        return render_template('add_book.html', info=info)
-
     # For GET requests, render the template for adding a new book
-    return render_template('add_book.html')
+    return render_template('add_book.html', section=section)
+
 
 
 @app.route("/sections/<sectionID>/<bookID>/delete",methods=['GET','POST'])
@@ -505,3 +555,121 @@ if __name__ == '__main__':
         host="0.0.0.0",
         port=5000
     )
+
+
+@app.route("/sections/<section_ID>/books")
+def view_books(section_ID):
+    section = Section.query.get(section_ID)
+    if section is None:
+        return "Section not found", 404
+    
+    books = Book.query.filter_by(Section_ID=section_ID).all()
+    return render_template("books.html", section=section, books=books)    
+
+
+@app.route('/logout')
+def logout():
+    # Clear the session
+    session.clear()
+    # Redirect to the desired page after logout (e.g., home page)
+    return render_template("home.html")    
+
+
+@app.route("/stats")
+def stats():
+    # Query to get the number of books in each section
+    books_per_section = (
+        db.session.query(Section.Name, func.count(Book.ID))
+        .join(Book)
+        .group_by(Section.ID)
+        .all()
+    )
+
+    # Query to get the number of requests for each book
+    requests_per_book = (
+        db.session.query(Book.Name, func.count(Request.ID))
+        .join(Request)
+        .group_by(Book.ID)
+        .all()
+    )
+
+    # Prepare data for plotting
+    section_labels = [section_name for section_name, _ in books_per_section]
+    book_labels = [book_title for book_title, _ in requests_per_book]
+    book_requests = [num_requests for _, num_requests in requests_per_book]
+
+    # Create pie chart for books per section
+    plt.figure(figsize=(8, 6))
+    plt.pie([num_books for _, num_books in books_per_section], labels=section_labels, autopct='%1.1f%%')
+    plt.title('Books Distribution per Section')
+    plt.tight_layout()
+    pie_chart_img = BytesIO()
+    plt.savefig(pie_chart_img, format='png')
+    pie_chart_img.seek(0)
+    pie_chart_data = base64.b64encode(pie_chart_img.getvalue()).decode()
+
+    # Create bar plot for requests per book
+    plt.figure(figsize=(10, 6))
+    plt.bar(book_labels, book_requests)
+    plt.xlabel('Books')
+    plt.ylabel('Number of Requests')
+    plt.title('Number of Requests per Book')
+    plt.xticks(rotation=45, ha='right')
+    plt.tight_layout()
+    bar_plot_img = BytesIO()
+    plt.savefig(bar_plot_img, format='png')
+    bar_plot_img.seek(0)
+    bar_plot_data = base64.b64encode(bar_plot_img.getvalue()).decode()
+
+    return render_template('stats.html', pie_chart_data=pie_chart_data, bar_plot_data=bar_plot_data)
+
+@app.route('/request_book', methods=['POST'])
+def request_book():
+    if request.method == 'POST':
+        book_id = request.form.get('book_id')
+        user_id = request.form.get('user_id')  # Assuming you have a way to get the user ID
+
+        # Check if the book is already requested by the user
+        existing_request = Request.query.filter_by(userID=user_id, bookID=book_id).first()
+        if existing_request:
+            return jsonify({'message': 'Book already requested by the user'})
+
+        # Create a new request entry
+        new_request = Request(userID=user_id, bookID=book_id)
+        db.session.add(new_request)
+        db.session.commit()
+
+        return jsonify({'message': 'Book requested successfully'})
+
+    return jsonify({'message': 'Invalid request method'})
+
+@app.route('/my_books/<uname>')
+def my_books(uname):
+    # Fetch books issued to the user from the request table
+    user_id = User.query.filter_by(uname=uname)
+    user_requests = Request.query.filter_by(userID=user_id).all()
+    
+    if user_id is None:
+        # Handle the case where user ID is not found in session, e.g., redirect to login
+        return redirect(url_for('login'))  # Redirect to login page if user ID is not in session
+    
+    # Fetch books issued to the user from the request table
+    user_requests = Request.query.filter_by(userID=user_id).all()
+    book_ids = [req.bookID for req in user_requests]
+    
+    # Fetch book details for the issued books
+    issued_books = []
+    for book_id in book_ids:
+        book = Book.query.get(book_id)
+        if book:
+            issued_books.append(book)
+    
+    user = User.query.get(user_id)
+    
+    user_data = {
+        'user': user,
+        'issued_books': issued_books,
+        'msg': ""
+    }
+    
+    return render_template('my_books.html', user_data=user_data)
