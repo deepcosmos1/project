@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>User Page</title>
+    <!-- Add any CSS stylesheets or meta tags here -->
+</head>
+<body>
+    <h1>Welcome, {{ user.uname }}!</h1>
+
+    <h2>Issued Books:</h2>
+    <ul>
+        {% for book in issued_books %}
+            <li>{{ book.Name }} by {{ book.Author }}</li>
+        {% endfor %}
+    </ul>
+
+    {% if msg %}
+        <p>{{ msg }}</p>
+    {% endif %}
+
+    <div>
+        <button onclick="window.location.href='/my_books'">My Books</button>
+        <button onclick="window.location.href='/books'">Books</button>
+        <button onclick="window.location.href='/stats'">Stats</button>
+        <button onclick="window.location.href='/logout'">Logout</button>
+    </div>
+
+    <!-- Add any additional content or functionality here -->
+</body>
+</html>
