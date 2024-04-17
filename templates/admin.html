@@ -27,11 +27,7 @@
         <h1>Welcome Admin!</h1>
         <div class="box">
             <h2>Pending Requests</h2>
-            <p>userID            bookID</p>
-            {% for request in requests %}
-            <p>{{request.userID}}               {{request.bookID}}</p><a href="/admin/{{request.userID}}/{{request.bookID}}/issue">Issue</a>
-            <br>
-            {% endfor %}
+            <button class="btn btn-primary" onclick="viewPendingRequests()">View Pending Requests</button>
         </div>
         <div class="box">
             <h2><a href="/users" >Manage Users</a></h2>
@@ -51,5 +47,10 @@
         <button><a href="/logout">Log Out</a></button>
     </div>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <script>
+        function viewPendingRequests() {
+            window.location.href = "/pending_requests"; // Redirect to the route for pending requests
+        }
+    </script>
 </body>
 </html>

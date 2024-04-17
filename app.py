@@ -35,6 +35,7 @@ class Request(db.Model):
     ID = db.Column(db.Integer, primary_key=True)
     userID = db.Column(db.Integer, db.ForeignKey('User.ID'))
     bookID = db.Column(db.Integer, db.ForeignKey('Book.ID'))
+    status = db.Column(db.String(20))
 
 class Feedback(db.Model):
     __tablename__ = 'Feedback'
@@ -635,7 +636,7 @@ def request_book():
             return jsonify({'message': 'Book already requested by the user'})
 
         # Create a new request entry
-        new_request = Request(userID=user_id, bookID=book_id)
+        new_request = Request(userID=user_id, bookID=book_id, status = 'pending')
         db.session.add(new_request)
         db.session.commit()
 
@@ -646,15 +647,15 @@ def request_book():
 @app.route('/my_books/<uname>')
 def my_books(uname):
     # Fetch books issued to the user from the request table
-    user_id = User.query.filter_by(uname=uname)
+    user_query = User.query.filter_by(uname=uname).first()
+    user_id = user_query.ID
     user_requests = Request.query.filter_by(userID=user_id).all()
     
     if user_id is None:
         # Handle the case where user ID is not found in session, e.g., redirect to login
         return redirect(url_for('login'))  # Redirect to login page if user ID is not in session
     
-    # Fetch books issued to the user from the request table
-    user_requests = Request.query.filter_by(userID=user_id).all()
+    # Fetch books issued to the user from the request tabl
     book_ids = [req.bookID for req in user_requests]
     
     # Fetch book details for the issued books
@@ -673,3 +674,11 @@ def my_books(uname):
     }
     
     return render_template('my_books.html', user_data=user_data)
+
+@app.route('/pending_requests')
+def view_pending_requests():
+    # Fetch pending requests data where status is not 'approved' or 'rejected'
+    pending_requests = Request.query.filter(Request.status.notin_(['approved', 'rejected'])).all()
+
+    # Render the pending requests template with the data
+    return render_template('pending_requests.html', requests=pending_requests)
